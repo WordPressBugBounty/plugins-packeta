@@ -9,7 +9,7 @@ declare( strict_types=1 );
 
 namespace Packetery\Module;
 
-use Packetery\Module\Carrier;
+use Packetery\Module\Framework\WpAdapter;
 use WC_Cart;
 use WC_Order;
 
@@ -28,13 +28,23 @@ class RateCalculator {
 	private $currencySwitcherFacade;
 
 	/**
+	 * Framework adapter.
+	 *
+	 * @var WpAdapter
+	 */
+	private $wpAdapter;
+
+	/**
 	 * RateCalculator constructor.
 	 *
+	 * @param WpAdapter              $wpAdapter       Framework adapter.
 	 * @param CurrencySwitcherFacade $currencySwitcherFacade Currency switcher facade.
 	 */
 	public function __construct(
+		WpAdapter $wpAdapter,
 		CurrencySwitcherFacade $currencySwitcherFacade
 	) {
+		$this->wpAdapter              = $wpAdapter;
 		$this->currencySwitcherFacade = $currencySwitcherFacade;
 	}
 
@@ -43,6 +53,7 @@ class RateCalculator {
 	 *
 	 * @param Carrier\Options $options                     Carrier options.
 	 * @param float           $cartPrice                   Price.
+	 * @param float           $totalCartProductValue       Total cart product value.
 	 * @param float|int       $cartWeight                  Weight.
 	 * @param bool            $isFreeShippingCouponApplied Is free shipping coupon applied?.
 	 *
@@ -51,16 +62,26 @@ class RateCalculator {
 	public function getShippingRateCost(
 		Carrier\Options $options,
 		float $cartPrice,
+		float $totalCartProductValue,
 		$cartWeight,
 		bool $isFreeShippingCouponApplied
 	): ?float {
 		$cost           = null;
 		$carrierOptions = $options->toArray();
 
-		if ( isset( $carrierOptions['weight_limits'] ) ) {
-			foreach ( $carrierOptions['weight_limits'] as $weightLimit ) {
+		if ( isset( $carrierOptions[ Carrier\OptionsPage::FORM_FIELD_WEIGHT_LIMITS ] ) && $options->getPricingType() === Carrier\Options::PRICING_TYPE_BY_WEIGHT ) {
+			foreach ( $carrierOptions[ Carrier\OptionsPage::FORM_FIELD_WEIGHT_LIMITS ] as $weightLimit ) {
 				if ( $cartWeight <= $weightLimit['weight'] ) {
 					$cost = $weightLimit['price'];
+					break;
+				}
+			}
+		}
+
+		if ( isset( $carrierOptions[ Carrier\OptionsPage::FORM_FIELD_PRODUCT_VALUE_LIMITS ] ) && $options->getPricingType() === Carrier\Options::PRICING_TYPE_BY_PRODUCT_VALUE ) {
+			foreach ( $carrierOptions[ Carrier\OptionsPage::FORM_FIELD_PRODUCT_VALUE_LIMITS ] as $productValueLimit ) {
+				if ( $totalCartProductValue <= $productValueLimit['value'] ) {
+					$cost = $productValueLimit['price'];
 					break;
 				}
 			}
@@ -83,9 +104,11 @@ class RateCalculator {
 		}
 
 		$filterParameters = [
-			'carrier_id'          => $carrierOptions['id'],
-			'free_shipping_limit' => $freeShippingLimit,
-			'weight_limits'       => $carrierOptions['weight_limits'],
+			'carrier_id'                                  => $carrierOptions['id'],
+			'free_shipping_limit'                         => $freeShippingLimit,
+			Carrier\OptionsPage::FORM_FIELD_PRICING_TYPE  => $options->getPricingType(),
+			Carrier\OptionsPage::FORM_FIELD_WEIGHT_LIMITS => $carrierOptions[ Carrier\OptionsPage::FORM_FIELD_WEIGHT_LIMITS ],
+			Carrier\OptionsPage::FORM_FIELD_PRODUCT_VALUE_LIMITS => $carrierOptions[ Carrier\OptionsPage::FORM_FIELD_PRODUCT_VALUE_LIMITS ] ?? [],
 		];
 
 		/**
@@ -93,7 +116,7 @@ class RateCalculator {
 		 *
 		 * @since 1.4.1
 		 */
-		return (float) apply_filters( 'packeta_shipping_price', (float) $cost, $filterParameters );
+		return (float) $this->wpAdapter->applyFilters( 'packeta_shipping_price', (float) $cost, $filterParameters );
 	}
 
 	/**

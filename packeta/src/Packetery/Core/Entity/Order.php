@@ -11,7 +11,6 @@ namespace Packetery\Core\Entity;
 
 use Packetery\Core\Helper;
 use DateTimeImmutable;
-use Packetery\Module\EntityFactory;
 
 /**
  * Class Order
@@ -755,12 +754,30 @@ class Order {
 	}
 
 	/**
+	 * Packet Claim barcode e.g Z123456789
+	 *
+	 * @return string|null
+	 */
+	public function getPacketClaimBarcode(): ?string {
+		return $this->packetClaimId ? 'Z' . $this->packetClaimId : null;
+	}
+
+	/**
 	 * Get packet tracking url
 	 *
 	 * @return string|null
 	 */
 	public function getPacketTrackingUrl(): ?string {
 		return $this->packetId ? sprintf( Helper::TRACKING_URL, $this->packetId ) : null;
+	}
+
+	/**
+	 * Get packet claim tracking url.
+	 *
+	 * @return string|null
+	 */
+	public function getPacketClaimTrackingUrl(): ?string {
+		return $this->packetClaimId ? sprintf( Helper::TRACKING_URL, $this->packetClaimId ) : null;
 	}
 
 	/**
@@ -798,6 +815,17 @@ class Order {
 	public function isPacketClaimCreationPossible(): bool {
 		return PacketStatus::DELIVERED === $this->packetStatus &&
 			null === $this->packetClaimId;
+	}
+
+	/**
+	 * Determines whether a packet is a claim, or otherwise.
+	 *
+	 * @param string $packetId Packet id.
+	 *
+	 * @return bool
+	 */
+	public function isPacketClaim( string $packetId ): bool {
+		return $this->getPacketClaimId() === $packetId;
 	}
 
 	/**

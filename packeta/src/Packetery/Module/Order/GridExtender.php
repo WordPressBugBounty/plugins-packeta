@@ -13,7 +13,7 @@ use Packetery\Core;
 use Packetery\Core\Helper;
 use Packetery\Core\Validator\Order;
 use Packetery\Module;
-use Packetery\Module\Carrier;
+use Packetery\Module\Carrier\CarrierOptionsFactory;
 use Packetery\Module\ContextResolver;
 use Packetery\Module\Exception\InvalidCarrierException;
 use Packetery\Module\Log\Purger;
@@ -74,14 +74,22 @@ class GridExtender {
 	private $contextResolver;
 
 	/**
+	 * Carrier options factory.
+	 *
+	 * @var CarrierOptionsFactory
+	 */
+	private $carrierOptionsFactory;
+
+	/**
 	 * GridExtender constructor.
 	 *
-	 * @param Helper          $helper Helper.
-	 * @param Engine          $latteEngine Latte Engine.
-	 * @param Request         $httpRequest Http Request.
-	 * @param Repository      $orderRepository Order repository.
-	 * @param Order           $orderValidator Order validator.
-	 * @param ContextResolver $contextResolver Context resolver.
+	 * @param Helper                $helper                Helper.
+	 * @param Engine                $latteEngine           Latte Engine.
+	 * @param Request               $httpRequest           Http Request.
+	 * @param Repository            $orderRepository       Order repository.
+	 * @param Order                 $orderValidator        Order validator.
+	 * @param ContextResolver       $contextResolver       Context resolver.
+	 * @param CarrierOptionsFactory $carrierOptionsFactory Carrier options factory.
 	 */
 	public function __construct(
 		Helper $helper,
@@ -89,14 +97,16 @@ class GridExtender {
 		Request $httpRequest,
 		Repository $orderRepository,
 		Order $orderValidator,
-		ContextResolver $contextResolver
+		ContextResolver $contextResolver,
+		CarrierOptionsFactory $carrierOptionsFactory
 	) {
-		$this->helper          = $helper;
-		$this->latteEngine     = $latteEngine;
-		$this->httpRequest     = $httpRequest;
-		$this->orderRepository = $orderRepository;
-		$this->orderValidator  = $orderValidator;
-		$this->contextResolver = $contextResolver;
+		$this->helper                = $helper;
+		$this->latteEngine           = $latteEngine;
+		$this->httpRequest           = $httpRequest;
+		$this->orderRepository       = $orderRepository;
+		$this->orderValidator        = $orderValidator;
+		$this->contextResolver       = $contextResolver;
+		$this->carrierOptionsFactory = $carrierOptionsFactory;
 	}
 
 	/**
@@ -268,7 +278,7 @@ class GridExtender {
 					break;
 				}
 
-				$homeDeliveryCarrierOptions = Carrier\Options::createByCarrierId( $order->getCarrier()->getId() );
+				$homeDeliveryCarrierOptions = $this->carrierOptionsFactory->createByCarrierId( $order->getCarrier()->getId() );
 				echo esc_html( $homeDeliveryCarrierOptions->getName() );
 				break;
 			case 'packetery_packet_id':
@@ -336,6 +346,7 @@ class GridExtender {
 					[
 						'order'                     => $order,
 						'orderIsSubmittable'        => $this->orderValidator->isValid( $order ),
+						'orderWarningFields'        => Form::getInvalidFieldsFromValidationResult( $this->orderValidator->validate( $order ) ),
 						'packetSubmitUrl'           => $packetSubmitUrl,
 						'packetCancelLink'          => $packetCancelLink,
 						'printLink'                 => $printLink,
@@ -344,16 +355,17 @@ class GridExtender {
 						'logPurgerDatetimeModifier' => get_option( Purger::PURGER_OPTION_NAME, Purger::PURGER_MODIFIER_DEFAULT ),
 						'packetDeliverOn'           => $this->helper->getStringFromDateTime( $order->getDeliverOn(), Core\Helper::DATEPICKER_FORMAT ),
 						'translations'              => [
-							'printLabel'                => __( 'Print label', 'packeta' ),
-							'setAdditionalPacketInfo'   => __( 'Set additional packet information', 'packeta' ),
-							'submitToPacketa'           => __( 'Submit to packeta', 'packeta' ),
+							'printLabel'                  => __( 'Print label', 'packeta' ),
+							'setAdditionalPacketInfo'     => __( 'Set additional packet information', 'packeta' ),
+							'packetSubmissionNotPossible' => __( 'It is not possible to submit the shipment because all the information required for this shipment is not filled.', 'packeta' ),
+							'submitToPacketa'             => __( 'Submit to Packeta', 'packeta' ),
 							// translators: %s: Order number.
-							'reallyCancelPacketHeading' => sprintf( __( 'Order #%s', 'packeta' ), $order->getCustomNumber() ),
+							'reallyCancelPacketHeading'   => sprintf( __( 'Order #%s', 'packeta' ), $order->getCustomNumber() ),
 							// translators: %s: Packet number.
-							'reallyCancelPacket'        => sprintf( __( 'Do you really wish to cancel parcel number %s?', 'packeta' ), (string) $order->getPacketId() ),
+							'reallyCancelPacket'          => sprintf( __( 'Do you really wish to cancel parcel number %s?', 'packeta' ), (string) $order->getPacketId() ),
 
-							'cancelPacket'              => __( 'Cancel packet', 'packeta' ),
-							'lastErrorFromApi'          => __( 'Last error from Packeta API', 'packeta' ),
+							'cancelPacket'                => __( 'Cancel packet', 'packeta' ),
+							'lastErrorFromApi'            => __( 'Last error from Packeta API', 'packeta' ),
 						],
 					]
 				);

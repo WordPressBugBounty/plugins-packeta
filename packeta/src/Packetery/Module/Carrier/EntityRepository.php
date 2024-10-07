@@ -43,20 +43,40 @@ class EntityRepository {
 	private $pickupPointsConfig;
 
 	/**
+	 * Car delivery config.
+	 *
+	 * @var CarDeliveryConfig
+	 */
+	private $carDeliveryConfig;
+
+	/**
+	 * Carrier options factory.
+	 *
+	 * @var CarrierOptionsFactory
+	 */
+	private $carrierOptionsFactory;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Repository                $repository           Carrier repository.
 	 * @param EntityFactory\Carrier     $carrierEntityFactory Carrier Entity Factory.
 	 * @param PacketaPickupPointsConfig $pickupPointsConfig   Internal pickup points config.
+	 * @param CarDeliveryConfig         $carDeliveryConfig    Car delivery config.
+	 * @param CarrierOptionsFactory     $carrierOptionsFactory Carrier options factory.
 	 */
 	public function __construct(
 		Repository $repository,
 		EntityFactory\Carrier $carrierEntityFactory,
-		PacketaPickupPointsConfig $pickupPointsConfig
+		PacketaPickupPointsConfig $pickupPointsConfig,
+		CarDeliveryConfig $carDeliveryConfig,
+		CarrierOptionsFactory $carrierOptionsFactory
 	) {
-		$this->repository           = $repository;
-		$this->carrierEntityFactory = $carrierEntityFactory;
-		$this->pickupPointsConfig   = $pickupPointsConfig;
+		$this->repository            = $repository;
+		$this->carrierEntityFactory  = $carrierEntityFactory;
+		$this->pickupPointsConfig    = $pickupPointsConfig;
+		$this->carDeliveryConfig     = $carDeliveryConfig;
+		$this->carrierOptionsFactory = $carrierOptionsFactory;
 	}
 
 	/**
@@ -76,7 +96,7 @@ class EntityRepository {
 	}
 
 	/**
-	 * Gets feed carrier or packeta carrier by id.
+	 * Gets feed carrier or Packeta carrier by id.
 	 *
 	 * @param string $carrierId Extended branch service id.
 	 *
@@ -188,7 +208,7 @@ class EntityRepository {
 		$activeCarriers = [];
 		$carriers       = $this->getAllCarriersIncludingNonFeed();
 		foreach ( $carriers as $carrier ) {
-			$carrierOptions = Options::createByCarrierId( $carrier->getId() );
+			$carrierOptions = $this->carrierOptionsFactory->createByCarrierId( $carrier->getId() );
 			if ( $carrierOptions->isActive() ) {
 				$activeCarriers[] = [
 					'option_id' => $carrierOptions->getOptionId(),
@@ -221,7 +241,7 @@ class EntityRepository {
 			return false;
 		}
 
-		return Options::createByCarrierId( $carrier->getId() )->isActive();
+		return $this->carrierOptionsFactory->createByCarrierId( $carrier->getId() )->isActive();
 	}
 
 	/**
@@ -236,18 +256,7 @@ class EntityRepository {
 			return false;
 		}
 
-		return false === ( $this->repository->hasPickupPoints( (int) $carrierId ) || $this->isCarDeliveryCarrier( $carrierId ) );
-	}
-
-	/**
-	 * Checks if carrier is car delivery carrier.
-	 *
-	 * @param string $carrierId Carrier ID.
-	 *
-	 * @return bool
-	 */
-	public function isCarDeliveryCarrier( string $carrierId ): bool {
-		return in_array( $carrierId, Carrier::CAR_DELIVERY_CARRIERS, true );
+		return false === ( $this->repository->hasPickupPoints( (int) $carrierId ) || $this->carDeliveryConfig->isCarDeliveryCarrier( $carrierId ) );
 	}
 
 	/**

@@ -17,6 +17,9 @@ use Packetery\Core\Rounder;
  */
 class Options {
 
+	public const PRICING_TYPE_BY_WEIGHT        = 'byWeight';
+	public const PRICING_TYPE_BY_PRODUCT_VALUE = 'byProductValue';
+
 	/**
 	 * Option ID.
 	 *
@@ -43,40 +46,12 @@ class Options {
 	}
 
 	/**
-	 * Creates instance by option ID.
-	 *
-	 * @param string $optionId Option ID.
-	 *
-	 * @return static
-	 */
-	public static function createByOptionId( string $optionId ): self {
-		$options = get_option( $optionId );
-		if ( empty( $options ) ) {
-			$options = [];
-		}
-
-		return new self( $optionId, $options );
-	}
-
-	/**
 	 * Option ID.
 	 *
 	 * @return string
 	 */
 	public function getOptionId(): string {
 		return $this->optionId;
-	}
-
-	/**
-	 * Creates instance by carrier ID.
-	 *
-	 * @param string $carrierId Carrier ID.
-	 *
-	 * @return static
-	 */
-	public static function createByCarrierId( string $carrierId ): self {
-		$optionId = OptionPrefixer::getOptionId( $carrierId );
-		return self::createByOptionId( $optionId );
 	}
 
 	/**
@@ -198,6 +173,15 @@ class Options {
 	 */
 	public function getCodRoundingType(): int {
 		return $this->options['cod_rounding'] ?? Rounder::DONT_ROUND;
+	}
+
+	/**
+	 * Gets pricing type.
+	 *
+	 * @return string
+	 */
+	public function getPricingType(): string {
+		return $this->options[ OptionsPage::FORM_FIELD_PRICING_TYPE ] ?? self::PRICING_TYPE_BY_WEIGHT;
 	}
 
 	/**

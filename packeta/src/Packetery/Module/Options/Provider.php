@@ -188,14 +188,14 @@ class Provider {
 	}
 
 	/**
-	 * Which payment rate id COD?
+	 * Returns COD payment methods.
 	 *
-	 * @return string|null Content.
+	 * @return string[] Values.
 	 */
-	public function getCodPaymentMethod(): ?string {
-		$value = $this->get( 'cod_payment_method' );
+	public function getCodPaymentMethods(): array {
+		$value = $this->get( 'cod_payment_methods' );
 		if ( ! $value ) {
-			return null;
+			return [];
 		}
 
 		return $value;
@@ -507,7 +507,7 @@ class Provider {
 	}
 
 	/**
-	 * Gets maximum offset for selected packeta labels format.
+	 * Gets maximum offset for selected Packeta labels format.
 	 *
 	 * @param string $format Selected format.
 	 *
@@ -523,7 +523,7 @@ class Provider {
 	}
 
 	/**
-	 * Gets list of packeta labels for select creation.
+	 * Gets list of Packeta labels for select creation.
 	 *
 	 * @return array
 	 */

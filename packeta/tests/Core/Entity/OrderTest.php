@@ -12,7 +12,16 @@ use Tests\Core\DummyFactory;
 class OrderTest extends TestCase {
 
 	public function testSettersAndGetters(): void {
-		$order = DummyFactory::createOrderCzPp();
+		$order             = DummyFactory::createOrderCzPp();
+		$carDeliveryOrder  = DummyFactory::createOrderCzCdIncomplete();
+		$homeDeliveryOrder = DummyFactory::createOrderCzHdIncomplete();
+
+		self::assertTrue( $carDeliveryOrder->isCarDelivery() );
+		self::assertTrue( $homeDeliveryOrder->isHomeDelivery() );
+
+		$dummyCarDeliveryId = 'qwe123';
+		$carDeliveryOrder->setCarDeliveryId( $dummyCarDeliveryId );
+		self::assertSame( $dummyCarDeliveryId, $carDeliveryOrder->getCarDeliveryId() );
 
 		$dummyCustomsDeclaration = DummyFactory::createCustomsDeclaration();
 		$order->setCustomsDeclaration( $dummyCustomsDeclaration );
@@ -49,6 +58,7 @@ class OrderTest extends TestCase {
 		self::assertSame( $dummyPickupPoint, $order->getPickupPoint() );
 		self::assertTrue( $order->isPickupPointDelivery() );
 		self::assertTrue( $order->isPacketaInternalPickupPoint() );
+		self::assertTrue( $order->allowsAdultContent() );
 
 		$dummyPacketId = 'dummyPacketId';
 		$order->setPacketId( $dummyPacketId );
@@ -64,6 +74,7 @@ class OrderTest extends TestCase {
 		$dummyPacketClaimId = 'dummyPacketClaimId';
 		$order->setPacketClaimId( $dummyPacketClaimId );
 		self::assertSame( $dummyPacketClaimId, $order->getPacketClaimId() );
+		self::assertSame( 'Z' . $dummyPacketClaimId, $order->getPacketClaimBarcode() );
 		self::assertTrue( $order->isPacketClaimLabelPrintPossible() );
 
 		$dummyPacketClaimPassword = 'dummyPassword';

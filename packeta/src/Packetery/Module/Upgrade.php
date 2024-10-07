@@ -221,6 +221,16 @@ class Upgrade {
 			}
 		}
 
+		if ( $oldVersion && version_compare( $oldVersion, '1.8.0', '<' ) ) {
+			$generalSettings = $this->optionsProvider->getOptionsByName( Options\Provider::OPTION_NAME_PACKETERY );
+			if ( isset( $generalSettings['cod_payment_method'] ) ) {
+				$generalSettings['cod_payment_methods'] = [ $generalSettings['cod_payment_method'] ];
+				unset( $generalSettings['cod_payment_method'] );
+			}
+
+			update_option( Provider::OPTION_NAME_PACKETERY, $generalSettings );
+		}
+
 		update_option( 'packetery_version', Plugin::VERSION );
 	}
 

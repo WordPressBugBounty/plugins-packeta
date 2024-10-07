@@ -10,11 +10,11 @@ declare( strict_types=1 );
 namespace Packetery\Module\Order;
 
 use Packetery\Core\Api\Soap\Client;
+use Packetery\Core\Api\Soap\ILabelResponse;
 use Packetery\Core\Api\Soap\Request;
 use Packetery\Core\Api\Soap\Response;
 use Packetery\Core\Log;
 use Packetery\Core\Entity\Order;
-use Packetery\Module\Exception\InvalidCarrierException;
 use Packetery\Module\FormFactory;
 use Packetery\Module\MessageManager;
 use Packetery\Module\Options\Provider;
@@ -92,18 +92,18 @@ class LabelPrint {
 	private $orderRepository;
 
 	/**
-	 * Log page.
-	 *
-	 * @var Module\Log\Page
-	 */
-	private $logPage;
-
-	/**
 	 * Packet actions common logic.
 	 *
 	 * @var PacketActionsCommonLogic
 	 */
 	private $packetActionsCommonLogic;
+
+	/**
+	 * Helper.
+	 *
+	 * @var Module\Helper
+	 */
+	private $helper;
 
 	/**
 	 * LabelPrint constructor.
@@ -116,8 +116,8 @@ class LabelPrint {
 	 * @param MessageManager           $messageManager           Message Manager.
 	 * @param Log\ILogger              $logger                   Logger.
 	 * @param Repository               $orderRepository          Order repository.
-	 * @param Module\Log\Page          $logPage                  Log page.
 	 * @param PacketActionsCommonLogic $packetActionsCommonLogic Packet actions common logic.
+	 * @param Module\Helper            $helper                   Helper.
 	 */
 	public function __construct(
 		Engine $latteEngine,
@@ -128,8 +128,8 @@ class LabelPrint {
 		MessageManager $messageManager,
 		Log\ILogger $logger,
 		Repository $orderRepository,
-		Module\Log\Page $logPage,
-		PacketActionsCommonLogic $packetActionsCommonLogic
+		PacketActionsCommonLogic $packetActionsCommonLogic,
+		Module\Helper $helper
 	) {
 		$this->latteEngine              = $latteEngine;
 		$this->optionsProvider          = $optionsProvider;
@@ -139,8 +139,8 @@ class LabelPrint {
 		$this->messageManager           = $messageManager;
 		$this->logger                   = $logger;
 		$this->orderRepository          = $orderRepository;
-		$this->logPage                  = $logPage;
 		$this->packetActionsCommonLogic = $packetActionsCommonLogic;
+		$this->helper                   = $helper;
 	}
 
 	/**
@@ -168,7 +168,7 @@ class LabelPrint {
 	 *
 	 * @return string
 	 */
-	public function getLabelFormatByOrder( Order $order ) {
+	public function getLabelFormatByOrder( Order $order ): string {
 		if ( $order->isExternalCarrier() ) {
 			return $this->optionsProvider->get_carrier_label_format();
 		}
@@ -235,7 +235,7 @@ class LabelPrint {
 
 		$fallbackToPacketaLabel = false;
 		$isCarrierLabels        = ( $this->httpRequest->getQuery( self::LABEL_TYPE_PARAM ) === self::ACTION_CARRIER_LABELS );
-		$idParam                = $this->httpRequest->getQuery( 'id' );
+		$idParam                = $this->httpRequest->getQuery( 'id' ) ? (int) $this->httpRequest->getQuery( 'id' ) : null;
 		$packetIdParam          = $this->httpRequest->getQuery( 'packet_id' );
 		if ( null !== $idParam && null !== $packetIdParam ) {
 			$fallbackToPacketaLabel = true;
@@ -284,10 +284,14 @@ class LabelPrint {
 
 			$redirectTo = $this->httpRequest->getQuery( PacketActionsCommonLogic::PARAM_REDIRECT_TO );
 			if ( PacketActionsCommonLogic::REDIRECT_TO_ORDER_DETAIL === $redirectTo && null !== $idParam ) {
-				$this->packetActionsCommonLogic->redirectTo( $redirectTo, $this->orderRepository->getById( (int) $idParam, true ) );
+				$this->packetActionsCommonLogic->redirectTo( $redirectTo, $this->orderRepository->findById( $idParam ) );
 			}
 			$this->packetActionsCommonLogic->redirectTo( PacketActionsCommonLogic::REDIRECT_TO_ORDER_GRID );
 			return;
+		}
+
+		foreach ( $packetIds as $orderId => $packetId ) {
+			$this->addLabelCreationInfoToWcOrderNote( $orderId, $packetId, $response );
 		}
 
 		header( 'Content-Type: application/pdf' );
@@ -370,11 +374,7 @@ class LabelPrint {
 			$record          = new Log\Record();
 			$record->action  = Log\Record::ACTION_LABEL_PRINT;
 			$record->orderId = $orderId;
-			try {
-				$order = $this->orderRepository->getById( $orderId );
-			} catch ( InvalidCarrierException $exception ) {
-				$order = null;
-			}
+			$order           = $this->orderRepository->getById( $orderId, true );
 
 			if ( ! $response->hasFault() ) {
 				if ( null !== $order ) {
@@ -426,11 +426,7 @@ class LabelPrint {
 			$record          = new Log\Record();
 			$record->action  = Log\Record::ACTION_CARRIER_LABEL_PRINT;
 			$record->orderId = $orderId;
-			try {
-				$order = $this->orderRepository->getById( $orderId );
-			} catch ( InvalidCarrierException $exception ) {
-				$order = null;
-			}
+			$order           = $this->orderRepository->getById( $orderId, true );
 
 			if ( ! $response->hasFault() ) {
 				if ( null !== $order ) {
@@ -492,7 +488,7 @@ class LabelPrint {
 				continue;
 			}
 			if ( ! $isCarrierLabels || $order->isExternalCarrier() ) {
-				$packetIds[ $order->getNumber() ] = $order->getPacketId();
+				$packetIds[ $order->getNumber() ] = (int) $order->getPacketId();
 			}
 		}
 
@@ -542,11 +538,7 @@ class LabelPrint {
 				];
 				$record->orderId = $orderId;
 				$this->logger->add( $record );
-				try {
-					$order = $this->orderRepository->getById( $orderId );
-				} catch ( InvalidCarrierException $exception ) {
-					$order = null;
-				}
+				$order = $this->orderRepository->getById( $orderId, true );
 				if ( null !== $order ) {
 					$order->updateApiErrorMessage( $response->getFaultString() );
 					$this->orderRepository->save( $order );
@@ -560,6 +552,49 @@ class LabelPrint {
 		}
 
 		return $pairs;
+	}
+
+	/**
+	 * Saves information about the creation of the label in the order note.
+	 *
+	 * @param int            $orderId  Order id.
+	 * @param string         $packetId Packet.
+	 * @param ILabelResponse $response Response.
+	 *
+	 * @return void
+	 */
+	private function addLabelCreationInfoToWcOrderNote( int $orderId, string $packetId, ILabelResponse $response ): void {
+		$order   = $this->orderRepository->findById( $orderId );
+		$wcOrder = $this->orderRepository->getWcOrderById( $orderId );
+		if ( null === $wcOrder || null === $order ) {
+			return;
+		}
+
+		$linkText    = $order->getPacketBarcode();
+		$trackingUrl = $order->getPacketTrackingUrl();
+		if ( $response instanceof Response\PacketsLabelsPdf ) {
+			if ( $order->isPacketClaim( $packetId ) ) {
+				// translators: %s represents a packet tracking link.
+				$message     = __( 'Packeta: Label for packet claim %s has been created', 'packeta' );
+				$linkText    = $order->getPacketClaimBarcode();
+				$trackingUrl = $order->getPacketClaimTrackingUrl();
+			} else {
+				// translators: %s represents a packet tracking link.
+				$message = __( 'Packeta: Label for packet %s has been created', 'packeta' );
+			}
+		} else {
+			// Response is of type Response\PacketsCourierLabelsPdf.
+			// translators: %s represents a packet tracking link.
+			$message = __( 'Packeta: Carrier label for packet %s has been created', 'packeta' );
+		}
+
+		$wcOrder->add_order_note(
+			sprintf(
+				$message,
+				$this->helper->createHtmlLink( $trackingUrl, $linkText )
+			)
+		);
+		$wcOrder->save();
 	}
 
 }

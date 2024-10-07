@@ -11,6 +11,8 @@ parameters:
         active: false
 
 services:
+	- Packetery\Module\Framework\WpAdapter
+	- Packetery\Module\Framework\WcAdapter
 	- Packetery\Module\Order\MetaboxesWrapper
 	- Packetery\Module\Order\Form
 	- Packetery\Module\Order\CarrierModal
@@ -18,14 +20,19 @@ services:
 	- Packetery\Module\ContextResolver
 	- Packetery\Module\Order\PacketCanceller
 	- Packetery\Module\EntityFactory\Address
+	- Packetery\Module\Helper
+	- Packetery\Module\Payment\PaymentHelper
 	- Packetery\Module\Log\Purger
 	- Packetery\Module\Log\Repository
 	- Packetery\Module\Log\DbLogger
 	- Packetery\Module\Log\Page
 	- Packetery\Module\CronService
 	- Packetery\Module\Product\DataTab
+	- Packetery\Module\Product\ProductEntityFactory
+	- Packetery\Module\ProductCategory\ProductCategoryEntityFactory
 	- Packetery\Module\ProductCategory\FormFields
 	- Packetery\Core\Helper
+	- Packetery\Module\WebRequestClient
 	- Packetery\Module\MessageManager
 	- Packetery\Module\Order\Metabox
 	- Packetery\Module\Order\CustomsDeclarationMetabox
@@ -38,7 +45,7 @@ services:
 	- Packetery\Module\Carrier\Downloader
 	- Packetery\Module\Carrier\Updater
 	- Packetery\Module\Carrier\Repository
-	- Packetery\GuzzleHttp\Client
+	- Packetery\Module\Carrier\CarrierOptionsFactory
 	wpdbAdapterFactory: Packetery\Module\WpdbAdapterFactory
 	- @wpdbAdapterFactory::create()
 	- Packetery\Module\WpdbTracyPanel

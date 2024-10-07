@@ -19,6 +19,7 @@ use Packetery\Module\MessageManager;
 use Packetery\Module\Options\FeatureFlagManager;
 use Packetery\Module\PaymentGatewayHelper;
 use Packetery\Nette\Forms\Container;
+use Packetery\Nette\Forms\Control;
 use Packetery\Nette\Forms\Form;
 use Packetery\Nette\Http\Request;
 
@@ -29,8 +30,11 @@ use Packetery\Nette\Http\Request;
  */
 class OptionsPage {
 
-	public const FORM_FIELD_NAME   = 'name';
-	public const FORM_FIELD_ACTIVE = 'active';
+	public const FORM_FIELD_NAME                 = 'name';
+	public const FORM_FIELD_ACTIVE               = 'active';
+	public const FORM_FIELD_WEIGHT_LIMITS        = 'weight_limits';
+	public const FORM_FIELD_PRODUCT_VALUE_LIMITS = 'product_value_limits';
+	public const FORM_FIELD_PRICING_TYPE         = 'pricing_type';
 
 	public const SLUG                    = 'packeta-country';
 	public const PARAMETER_COUNTRY_CODE  = 'country_code';
@@ -108,6 +112,13 @@ class OptionsPage {
 	private $wcSettingsConfig;
 
 	/**
+	 * Carrier options factory.
+	 *
+	 * @var CarrierOptionsFactory
+	 */
+	private $carrierOptionsFactory;
+
+	/**
 	 * OptionsPage constructor.
 	 *
 	 * @param Engine                    $latteEngine        PacketeryLatte_engine.
@@ -120,6 +131,7 @@ class OptionsPage {
 	 * @param FeatureFlagManager        $featureFlag        Feature flag.
 	 * @param CarDeliveryConfig         $carDeliveryConfig  Car delivery config.
 	 * @param WcSettingsConfig          $wcSettingsConfig   WC Native carrier settings config.
+	 * @param CarrierOptionsFactory     $carrierOptionsFactory Carrier options factory.
 	 */
 	public function __construct(
 		Engine $latteEngine,
@@ -131,18 +143,20 @@ class OptionsPage {
 		PacketaPickupPointsConfig $pickupPointsConfig,
 		FeatureFlagManager $featureFlag,
 		CarDeliveryConfig $carDeliveryConfig,
-		WcSettingsConfig $wcSettingsConfig
+		WcSettingsConfig $wcSettingsConfig,
+		CarrierOptionsFactory $carrierOptionsFactory
 	) {
-		$this->latteEngine        = $latteEngine;
-		$this->carrierRepository  = $carrierRepository;
-		$this->formFactory        = $formFactory;
-		$this->httpRequest        = $httpRequest;
-		$this->countryListingPage = $countryListingPage;
-		$this->messageManager     = $messageManager;
-		$this->pickupPointsConfig = $pickupPointsConfig;
-		$this->featureFlag        = $featureFlag;
-		$this->carDeliveryConfig  = $carDeliveryConfig;
-		$this->wcSettingsConfig   = $wcSettingsConfig;
+		$this->latteEngine           = $latteEngine;
+		$this->carrierRepository     = $carrierRepository;
+		$this->formFactory           = $formFactory;
+		$this->httpRequest           = $httpRequest;
+		$this->countryListingPage    = $countryListingPage;
+		$this->messageManager        = $messageManager;
+		$this->pickupPointsConfig    = $pickupPointsConfig;
+		$this->featureFlag           = $featureFlag;
+		$this->carDeliveryConfig     = $carDeliveryConfig;
+		$this->wcSettingsConfig      = $wcSettingsConfig;
+		$this->carrierOptionsFactory = $carrierOptionsFactory;
 	}
 
 	/**
@@ -202,12 +216,36 @@ class OptionsPage {
 			}
 		}
 
-		$weightLimits = $form->addContainer( 'weight_limits' );
-		if ( empty( $carrierData['weight_limits'] ) ) {
+		$form->addSelect(
+			self::FORM_FIELD_PRICING_TYPE,
+			__( 'Pricing type', 'packeta' ),
+			[
+				Options::PRICING_TYPE_BY_WEIGHT        => __( 'By weight', 'packeta' ),
+				Options::PRICING_TYPE_BY_PRODUCT_VALUE => __( 'By product value', 'packeta' ),
+			]
+		)
+			->setDefaultValue( Options::PRICING_TYPE_BY_WEIGHT )
+			->addCondition( Form::EQUAL, Options::PRICING_TYPE_BY_WEIGHT )
+				->toggle( $this->createFieldContainerId( $form, self::FORM_FIELD_WEIGHT_LIMITS ) )
+			->endCondition()
+			->addCondition( Form::EQUAL, Options::PRICING_TYPE_BY_PRODUCT_VALUE )
+				->toggle( $this->createFieldContainerId( $form, self::FORM_FIELD_PRODUCT_VALUE_LIMITS ) );
+
+		$weightLimits = $form->addContainer( self::FORM_FIELD_WEIGHT_LIMITS );
+		if ( empty( $carrierData[ self::FORM_FIELD_WEIGHT_LIMITS ] ) ) {
 			$this->addWeightLimit( $weightLimits, 0 );
 		} else {
-			foreach ( $carrierData['weight_limits'] as $index => $limit ) {
+			foreach ( $carrierData[ self::FORM_FIELD_WEIGHT_LIMITS ] as $index => $limit ) {
 				$this->addWeightLimit( $weightLimits, $index );
+			}
+		}
+
+		$productValueLimits = $form->addContainer( self::FORM_FIELD_PRODUCT_VALUE_LIMITS );
+		if ( empty( $carrierData[ self::FORM_FIELD_PRODUCT_VALUE_LIMITS ] ) ) {
+			$this->addProductValueLimit( $productValueLimits, 0 );
+		} else {
+			foreach ( $carrierData[ self::FORM_FIELD_PRODUCT_VALUE_LIMITS ] as $index => $limit ) {
+				$this->addProductValueLimit( $productValueLimits, $index );
 			}
 		}
 
@@ -315,6 +353,18 @@ class OptionsPage {
 	}
 
 	/**
+	 * Creates container id for given field.
+	 *
+	 * @param Form   $form Form.
+	 * @param string $field Field name.
+	 *
+	 * @return string
+	 */
+	private function createFieldContainerId( Form $form, string $field ): string {
+		return sprintf( '%s_%s_containerId', $form->getName(), $field );
+	}
+
+	/**
 	 * Creates settings form.
 	 *
 	 * @param array $carrierData Carrier data.
@@ -326,8 +376,13 @@ class OptionsPage {
 
 		$form = $this->formFactory->create( $optionId . '_template' );
 
-		$weightLimitsTemplate = $form->addContainer( 'weight_limits' );
+		$form->addSelect( self::FORM_FIELD_PRICING_TYPE );
+
+		$weightLimitsTemplate = $form->addContainer( self::FORM_FIELD_WEIGHT_LIMITS );
 		$this->addWeightLimit( $weightLimitsTemplate, 0 );
+
+		$valueLimitsTemplate = $form->addContainer( self::FORM_FIELD_PRODUCT_VALUE_LIMITS );
+		$this->addProductValueLimit( $valueLimitsTemplate, 0 );
 
 		$surchargeLimitsTemplate = $form->addContainer( 'surcharge_limits' );
 		$this->addSurchargeLimit( $surchargeLimitsTemplate, 0 );
@@ -361,13 +416,26 @@ class OptionsPage {
 			}
 		}
 
-		$this->checkOverlapping(
-			$form,
-			$options,
-			'weight_limits',
-			'weight',
-			__( 'Weight rules are overlapping, please fix them.', 'packeta' )
-		);
+		if ( Options::PRICING_TYPE_BY_WEIGHT === $options[ self::FORM_FIELD_PRICING_TYPE ] ) {
+			$this->checkOverlapping(
+				$form,
+				$options,
+				self::FORM_FIELD_WEIGHT_LIMITS,
+				'weight',
+				__( 'Weight rules are overlapping, please fix them.', 'packeta' )
+			);
+		}
+
+		if ( Options::PRICING_TYPE_BY_PRODUCT_VALUE === $options[ self::FORM_FIELD_PRICING_TYPE ] ) {
+			$this->checkOverlapping(
+				$form,
+				$options,
+				self::FORM_FIELD_PRODUCT_VALUE_LIMITS,
+				'price',
+				__( 'Product price rules are overlapping, please fix them.', 'packeta' )
+			);
+		}
+
 		if ( isset( $options['surcharge_limits'] ) ) {
 			$this->checkOverlapping(
 				$form,
@@ -393,13 +461,26 @@ class OptionsPage {
 			$options['vendor_groups'] = $newVendors;
 		}
 
+		$persistedOptions      = $this->carrierOptionsFactory->createByCarrierId( $options['id'] );
+		$persistedOptionsArray = $persistedOptions->toArray();
 		if ( $this->wcSettingsConfig->isActive() ) {
-			$persistedOptions                   = Options::createByCarrierId( $options['id'] );
 			$options[ self::FORM_FIELD_ACTIVE ] = $persistedOptions->isActive();
 		}
 
-		$options = $this->mergeNewLimits( $options, 'weight_limits' );
-		$options = $this->sortLimits( $options, 'weight_limits', 'weight' );
+		if ( Options::PRICING_TYPE_BY_WEIGHT === $options[ self::FORM_FIELD_PRICING_TYPE ] ) {
+			$options = $this->mergeNewLimits( $options, self::FORM_FIELD_WEIGHT_LIMITS );
+			$options = $this->sortLimits( $options, self::FORM_FIELD_WEIGHT_LIMITS, 'weight' );
+
+			$options[ self::FORM_FIELD_PRODUCT_VALUE_LIMITS ] = $persistedOptionsArray[ self::FORM_FIELD_PRODUCT_VALUE_LIMITS ] ?? [];
+		}
+
+		if ( Options::PRICING_TYPE_BY_PRODUCT_VALUE === $options[ self::FORM_FIELD_PRICING_TYPE ] ) {
+			$options = $this->mergeNewLimits( $options, self::FORM_FIELD_PRODUCT_VALUE_LIMITS );
+			$options = $this->sortLimits( $options, self::FORM_FIELD_PRODUCT_VALUE_LIMITS, 'value' );
+
+			$options[ self::FORM_FIELD_WEIGHT_LIMITS ] = $persistedOptionsArray[ self::FORM_FIELD_WEIGHT_LIMITS ] ?? [];
+		}
+
 		if ( isset( $options['surcharge_limits'] ) ) {
 			$options = $this->mergeNewLimits( $options, 'surcharge_limits' );
 			$options = $this->sortLimits( $options, 'surcharge_limits', 'order_price' );
@@ -431,7 +512,7 @@ class OptionsPage {
 			return null;
 		}
 
-		if ( $carrier->isCarDelivery() && ! $this->carDeliveryConfig->isEnabled() ) {
+		if ( $carrier->isCarDelivery() && $this->carDeliveryConfig->isDisabled() ) {
 			return null;
 		}
 
@@ -457,6 +538,9 @@ class OptionsPage {
 			'formTemplate'                         => $formTemplate,
 			'carrier'                              => $carrier,
 			'couponFreeShippingForFeesContainerId' => $this->createCouponFreeShippingForFeesContainerId( $form ),
+			'weightLimitsContainerId'              => $this->createFieldContainerId( $form, self::FORM_FIELD_WEIGHT_LIMITS ),
+			'productValueLimitsContainerId'        => $this->createFieldContainerId( $form, self::FORM_FIELD_PRODUCT_VALUE_LIMITS ),
+			'isAvailableVendorsCountLow'           => $this->isAvailableVendorsCountLowByCarrierId( $carrier->getId() ),
 		];
 	}
 
@@ -473,7 +557,9 @@ class OptionsPage {
 				'cannotUseThisCarrierBecauseRequiresCustomsDeclaration' => __( 'This carrier cannot be used, because it requires a customs declaration.', 'packeta' ),
 				'delete'                                 => __( 'Delete', 'packeta' ),
 				'weightRules'                            => __( 'Weight rules', 'packeta' ),
+				'productValueRules'                      => __( 'Product value rules', 'packeta' ),
 				'addWeightRule'                          => __( 'Add weight rule', 'packeta' ),
+				'addProductValueRule'                    => __( 'Add product value rule', 'packeta' ),
 				'codSurchargeRules'                      => __( 'COD surcharge rules', 'packeta' ),
 				'addCodSurchargeRule'                    => __( 'Add COD surcharge rule', 'packeta' ),
 				'afterExceedingThisAmountShippingIsFree' => __( 'After exceeding this amount, shipping is free.', 'packeta' ),
@@ -488,6 +574,7 @@ class OptionsPage {
 				'carrierDoesNotSupportCod'               => __( 'This carrier does not support COD payment.', 'packeta' ),
 				'allowedPickupPointTypes'                => __( 'Pickup point types', 'packeta' ),
 				'checkAtLeastTwo'                        => __( 'Check at least two types of pickup points or use a carrier which delivers to the desired pickup point type.', 'packeta' ),
+				'lowAvailableVendorsCount'               => __( 'This carrier displays all types of pickup points at the same time in the checkout (retail store pickup points, Z-boxes).', 'packeta' ),
 			],
 		];
 
@@ -612,25 +699,54 @@ class OptionsPage {
 	 * @return void
 	 */
 	private function addWeightLimit( Container $weightLimits, $index ): void {
-		$limit = $weightLimits->addContainer( (string) $index );
-		$item  = $limit->addText( 'weight', __( 'Weight up to', 'packeta' ) . ':' );
-		$item->setRequired();
-		$item->addRule( Form::FLOAT, __( 'Please enter a valid decimal number.', 'packeta' ) );
+		/** Pricing type control. @var Control $pricingTypeControl */
+		$pricingTypeControl = $weightLimits->getForm()->getComponent( self::FORM_FIELD_PRICING_TYPE );
+		$limit              = $weightLimits->addContainer( (string) $index );
+		$item               = $limit->addText( 'weight', __( 'Weight up to', 'packeta' ) . ':' );
+		$itemRules          = $item->addConditionOn( $pricingTypeControl, Form::EQUAL, Options::PRICING_TYPE_BY_WEIGHT );
+		$itemRules->setRequired();
+		$itemRules->addRule( Form::FLOAT, __( 'Please enter a valid decimal number.', 'packeta' ) );
 		// translators: %d is numeric threshold.
-		$item->addRule( [ FormValidators::class, 'greaterThan' ], __( 'Enter number greater than %d', 'packeta' ), 0.0 );
+		$itemRules->addRule( [ FormValidators::class, 'greaterThan' ], __( 'Enter number greater than %d', 'packeta' ), 0.0 );
 
-		$item->addFilter(
+		$itemRules->addFilter(
 			function ( float $value ) {
 				return Helper::simplifyWeight( $value );
 			}
 		);
 		// translators: %d is numeric threshold.
-		$item->addRule( [ FormValidators::class, 'greaterThan' ], __( 'Enter number greater than %d', 'packeta' ), 0.0 );
+		$itemRules->addRule( [ FormValidators::class, 'greaterThan' ], __( 'Enter number greater than %d', 'packeta' ), 0.0 );
 
-		$item = $limit->addText( 'price', __( 'Price', 'packeta' ) . ':' );
-		$item->setRequired();
-		$item->addRule( Form::FLOAT, __( 'Please enter a valid decimal number.', 'packeta' ) );
-		$item->addRule( Form::MIN, null, 0 );
+		$item      = $limit->addText( 'price', __( 'Price', 'packeta' ) . ':' );
+		$itemRules = $item->addConditionOn( $pricingTypeControl, Form::EQUAL, Options::PRICING_TYPE_BY_WEIGHT );
+		$itemRules->setRequired();
+		$itemRules->addRule( Form::FLOAT, __( 'Please enter a valid decimal number.', 'packeta' ) );
+		$itemRules->addRule( Form::MIN, null, 0 );
+	}
+
+	/**
+	 * Adds product value limit fields to form.
+	 *
+	 * @param Container  $productValueLimits Container.
+	 * @param int|string $index Index.
+	 *
+	 * @return void
+	 */
+	private function addProductValueLimit( Container $productValueLimits, $index ): void {
+		/** Pricing type control. @var Control $pricingTypeControl */
+		$pricingTypeControl = $productValueLimits->getForm()->getComponent( self::FORM_FIELD_PRICING_TYPE );
+		$limit              = $productValueLimits->addContainer( (string) $index );
+		$item               = $limit->addText( 'value', __( 'Product value up to', 'packeta' ) . ':' );
+		$itemRules          = $item->addConditionOn( $pricingTypeControl, Form::EQUAL, Options::PRICING_TYPE_BY_PRODUCT_VALUE );
+		$itemRules->setRequired();
+		$itemRules->addRule( Form::FLOAT, __( 'Please enter a valid decimal number.', 'packeta' ) );
+		$itemRules->addRule( Form::MIN, null, 0 );
+
+		$item      = $limit->addText( 'price', __( 'Price', 'packeta' ) . ':' );
+		$itemRules = $item->addConditionOn( $pricingTypeControl, Form::EQUAL, Options::PRICING_TYPE_BY_PRODUCT_VALUE );
+		$itemRules->setRequired();
+		$itemRules->addRule( Form::FLOAT, __( 'Please enter a valid decimal number.', 'packeta' ) );
+		$itemRules->addRule( Form::MIN, null, 0 );
 	}
 
 	/**
@@ -741,30 +857,26 @@ class OptionsPage {
 	 */
 	private function getVendorCheckboxesConfig( string $carrierId, ?array $carrierOptions ): array {
 		$availableVendors = $this->getAvailableVendors( $carrierId );
-		if ( null === $availableVendors ) {
+		if ( null === $availableVendors || $this->isAvailableVendorsCountLowerThanRequiredMinimum( $availableVendors ) ) {
 			return [];
 		}
 
 		$vendorCheckboxes = [];
 		$vendorCarriers   = $this->pickupPointsConfig->getVendorCarriers();
 		foreach ( $availableVendors as $vendorId ) {
-			$vendorProvider       = $vendorCarriers[ $vendorId ];
-			$checkbox             = [
+			$vendorProvider        = $vendorCarriers[ $vendorId ];
+			$checkbox              = [
 				'group'    => $vendorProvider->getGroup(),
 				'name'     => $vendorProvider->getName(),
 				'disabled' => null,
 				'default'  => null,
 			];
-			$hasLowCountAvailable = count( $availableVendors ) <= self::MINIMUM_CHECKED_VENDORS;
-			if ( $hasLowCountAvailable ) {
-				$checkbox['disabled'] = true;
-			}
 			$hasGroupSettingsSaved = isset( $carrierOptions['vendor_groups'] );
 			$hasTheGroupAllowed    = (
 				$hasGroupSettingsSaved &&
 				in_array( $vendorProvider->getGroup(), $carrierOptions['vendor_groups'], true )
 			);
-			if ( ! $hasGroupSettingsSaved || $hasLowCountAvailable || $hasTheGroupAllowed ) {
+			if ( ! $hasGroupSettingsSaved || $hasTheGroupAllowed ) {
 				$checkbox['default'] = true;
 			}
 			$vendorCheckboxes[] = $checkbox;
@@ -773,4 +885,26 @@ class OptionsPage {
 		return $vendorCheckboxes;
 	}
 
+	/**
+	 * Check if the number of vendors is lower than the required minimum
+	 *
+	 * @param array $availableVendors Available vendors.
+	 *
+	 * @return bool
+	 */
+	public function isAvailableVendorsCountLowerThanRequiredMinimum( array $availableVendors ): bool {
+		return count( $availableVendors ) <= self::MINIMUM_CHECKED_VENDORS;
+	}
+
+	/**
+	 * Checks if the number of vendors is lower than the minimum required by the carrier id
+	 *
+	 * @param string $carrierId Carrier id.
+	 *
+	 * @return bool
+	 */
+	public function isAvailableVendorsCountLowByCarrierId( string $carrierId ): bool {
+		$availableVendors = $this->getAvailableVendors( $carrierId );
+		return is_array( $availableVendors ) && $this->isAvailableVendorsCountLowerThanRequiredMinimum( $availableVendors );
+	}
 }

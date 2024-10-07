@@ -9,9 +9,9 @@ declare( strict_types=1 );
 
 namespace Packetery\Module\Order;
 
-use Packetery\Core\Entity;
 use Packetery\Latte\Engine;
 use Packetery\Module\Carrier;
+use Packetery\Module\Carrier\CarrierOptionsFactory;
 use Packetery\Module\Carrier\WcSettingsConfig;
 use Packetery\Module\Helper;
 use Packetery\Nette\Forms;
@@ -69,6 +69,13 @@ class CarrierModal {
 	private $wcNativeCarrierSettings;
 
 	/**
+	 * Carrier options factory.
+	 *
+	 * @var CarrierOptionsFactory
+	 */
+	private $carrierOptionsFactory;
+
+	/**
 	 * Constructor.
 	 *
 	 * @param Engine                   $latteEngine              Latte engine.
@@ -77,6 +84,7 @@ class CarrierModal {
 	 * @param Repository               $orderRepository          Order repository.
 	 * @param Carrier\EntityRepository $carrierRepository        Carrier repository.
 	 * @param WcSettingsConfig         $wcNativeCarrierSettings  Native Carrier settings.
+	 * @param CarrierOptionsFactory    $carrierOptionsFactory    Carrier options factory.
 	 */
 	public function __construct(
 		Engine $latteEngine,
@@ -84,7 +92,8 @@ class CarrierModal {
 		CarrierModalFormFactory $carrierModalFormFactory,
 		Repository $orderRepository,
 		Carrier\EntityRepository $carrierRepository,
-		WcSettingsConfig $wcNativeCarrierSettings
+		WcSettingsConfig $wcNativeCarrierSettings,
+		CarrierOptionsFactory $carrierOptionsFactory
 	) {
 		$this->latteEngine             = $latteEngine;
 		$this->detailCommonLogic       = $detailCommonLogic;
@@ -92,6 +101,7 @@ class CarrierModal {
 		$this->orderRepository         = $orderRepository;
 		$this->carrierRepository       = $carrierRepository;
 		$this->wcNativeCarrierSettings = $wcNativeCarrierSettings;
+		$this->carrierOptionsFactory   = $carrierOptionsFactory;
 	}
 
 	/**
@@ -116,7 +126,10 @@ class CarrierModal {
 			return;
 		}
 
-		$form              = $this->carrierModalFormFactory->create( $this->getCarriersByCountry(), $this->getCurrentCarrier() );
+		$form              = $this->carrierModalFormFactory->create(
+			$this->getCarrierOptionsByCountry(),
+			$this->getCurrentCarrier()
+		);
 		$form->onSuccess[] = [ $this, 'onFormSuccess' ];
 
 		if ( $form['submit']->isSubmittedBy() ) {
@@ -170,7 +183,7 @@ class CarrierModal {
 	/**
 	 * Saves order stub with new Carrier, if instantiable.
 	 *
-	 * @param int    $orderId Order id.
+	 * @param int    $orderId      Order id.
 	 * @param string $newCarrierId Carrier id.
 	 *
 	 * @return string
@@ -189,19 +202,24 @@ class CarrierModal {
 			]
 		);
 
-		return $newCarrier->getName();
+		$options = $this->carrierOptionsFactory->createByCarrierId( $newCarrier->getId() );
+		if ( ! $options->hasOptions() ) {
+			throw new RuntimeException( 'Missing options for carrier ' . $newCarrier->getId() );
+		}
+
+		return $options->getName();
 	}
 
 	/**
-	 * Gets Carriers by the country of destination.
+	 * Gets carrier names by the country of destination.
 	 *
-	 * @return Entity\Carrier[]
+	 * @return string[]
 	 */
-	private function getCarriersByCountry(): array {
-		static $carriers;
+	private function getCarrierOptionsByCountry(): array {
+		static $carrierOptions;
 
-		if ( isset( $carriers ) ) {
-			return $carriers;
+		if ( isset( $carrierOptions ) ) {
+			return $carrierOptions;
 		}
 
 		$wcOrderId = $this->detailCommonLogic->getOrderId();
@@ -221,14 +239,15 @@ class CarrierModal {
 
 		$carriers = $this->carrierRepository->getByCountryIncludingNonFeed( $shippingCountry );
 
-		foreach ( $carriers as $key => $carrier ) {
-			$options = Carrier\Options::createByCarrierId( $carrier->getId() );
-			if ( ! $options->hasOptions() ) {
-				unset( $carriers[ $key ] );
+		$carrierOptions = [];
+		foreach ( $carriers as $carrier ) {
+			$options = $this->carrierOptionsFactory->createByCarrierId( $carrier->getId() );
+			if ( $options->hasOptions() ) {
+				$carrierOptions[ $carrier->getId() ] = $options->getName();
 			}
 		}
 
-		return $carriers;
+		return $carrierOptions;
 	}
 
 	/**
@@ -237,8 +256,8 @@ class CarrierModal {
 	 * @return bool
 	 */
 	public function canBeDisplayed(): bool {
-		$carriers = $this->getCarriersByCountry();
-		if ( [] === $carriers ) {
+		$carrierOptions = $this->getCarrierOptionsByCountry();
+		if ( [] === $carrierOptions ) {
 			return false;
 		}
 

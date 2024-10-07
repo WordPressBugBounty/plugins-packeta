@@ -10,7 +10,9 @@ declare( strict_types=1 );
 
 namespace Packetery\Module\Product;
 
+use Packetery\Module\Carrier\CarDeliveryConfig;
 use Packetery\Module\Carrier\EntityRepository;
+use Packetery\Module\Carrier\OptionPrefixer;
 use Packetery\Module\FormFactory;
 use Packetery\Module\Product;
 use Packetery\Latte\Engine;
@@ -47,16 +49,40 @@ class DataTab {
 	private $carrierRepository;
 
 	/**
+	 * Car delivery config.
+	 *
+	 * @var CarDeliveryConfig
+	 */
+	private $carDeliveryConfig;
+
+	/**
+	 * Product entity factory.
+	 *
+	 * @var ProductEntityFactory
+	 */
+	private $productEntityFactory;
+
+	/**
 	 * Tab constructor.
 	 *
-	 * @param FormFactory      $formFactory       Factory engine.
-	 * @param Engine           $latteEngine       Latte engine.
-	 * @param EntityRepository $carrierRepository Carrier repository.
+	 * @param FormFactory          $formFactory          Factory engine.
+	 * @param Engine               $latteEngine          Latte engine.
+	 * @param EntityRepository     $carrierRepository    Carrier repository.
+	 * @param CarDeliveryConfig    $carDeliveryConfig    Car Delivery config.
+	 * @param ProductEntityFactory $productEntityFactory Product entity factory.
 	 */
-	public function __construct( FormFactory $formFactory, Engine $latteEngine, EntityRepository $carrierRepository ) {
-		$this->formFactory       = $formFactory;
-		$this->latteEngine       = $latteEngine;
-		$this->carrierRepository = $carrierRepository;
+	public function __construct(
+		FormFactory $formFactory,
+		Engine $latteEngine,
+		EntityRepository $carrierRepository,
+		CarDeliveryConfig $carDeliveryConfig,
+		ProductEntityFactory $productEntityFactory
+	) {
+		$this->formFactory          = $formFactory;
+		$this->latteEngine          = $latteEngine;
+		$this->carrierRepository    = $carrierRepository;
+		$this->carDeliveryConfig    = $carDeliveryConfig;
+		$this->productEntityFactory = $productEntityFactory;
 	}
 
 	/**
@@ -101,6 +127,9 @@ class DataTab {
 		$carriersContainer = $form->addContainer( Product\Entity::META_DISALLOWED_SHIPPING_RATES );
 		$carriersList      = $this->carrierRepository->getAllActiveCarriersList();
 		foreach ( $carriersList as $carrier ) {
+			if ( $this->carDeliveryConfig->isCarDeliveryCarrierDisabled( OptionPrefixer::removePrefix( $carrier['option_id'] ) ) ) {
+				continue;
+			}
 			$carriersContainer->addCheckbox( $carrier['option_id'], $carrier['label'] );
 		}
 
@@ -123,7 +152,7 @@ class DataTab {
 		$this->latteEngine->render(
 			PACKETERY_PLUGIN_DIR . '/template/product/data-tab-panel.latte',
 			[
-				'form'         => $this->createForm( Product\Entity::fromGlobals() ),
+				'form'         => $this->createForm( $this->productEntityFactory->fromGlobals() ),
 				'translations' => [
 					'disallowedShippingRatesHeading' => __( 'Packeta shipping methods disabled for this product.', 'packeta' ),
 				],
@@ -137,7 +166,7 @@ class DataTab {
 	 * @param int|string $postId Post ID.
 	 */
 	public function saveData( $postId ): void {
-		$product = Product\Entity::fromPostId( $postId );
+		$product = $this->productEntityFactory->fromPostId( $postId );
 		if ( false === $product->isPhysical() ) {
 			return;
 		}

@@ -4,6 +4,9 @@
     <li n:if="$packetTrackingUrl">
         {$translations['packetTrackingOnline']}: <a href="{$packetTrackingUrl}" target="_blank">Z{$order->getPacketId()}</a>
     </li>
+    <li n:if="$orderStatus">
+        <p class="packetery-order-status {$statusClass}">{$orderStatus}</p>
+    </li>
     <li n:if="$packetClaimTrackingUrl">
         {$translations['packetClaimTrackingOnline']}: <a href="{$packetClaimTrackingUrl}" target="_blank">Z{$order->getPacketClaimId()}</a>
         <span class="packetery-claim-password-short" n:if="$order->getPacketClaimId() && $order->getPacketClaimPassword()"> ({$translations['submissionPassword']}: {$order->getPacketClaimPassword()})</span>
@@ -15,13 +18,16 @@
 
 <div class="packetery-metabox-overview-buttons">
     <a n:if="$showLogsLink" class="button" href="{$showLogsLink}">{$translations['showLogs']}</a>
-    <a
-            n:if="$showSubmitPacketButton"
-            class="button dashicons dashicons-upload packetery-dashicons-button-fix" href="{$packetSubmitUrl}"
-            href="{$packetSubmitUrl}"
-    >
-        <span class="packetery-dashicons-button-fix-text">{$translations['submitPacket']}</span>
-    </a>
+    <div n:if="isset($packetSubmitUrl)" class="packetery-metabox-button-wrapper">
+        <a
+                {if !$isPacketSubmissionPossible}disabled{/if}
+                class="button dashicons {if !$isPacketSubmissionPossible}dashicons-warning{else}dashicons-upload{/if} packetery-dashicons-button-fix"
+                {if $isPacketSubmissionPossible}href="{$packetSubmitUrl}"{/if}
+        >
+            <span class="packetery-dashicons-button-fix-text">{$translations['submitPacket']}</span>
+        </a>
+        <span n:if="!$isPacketSubmissionPossible" class="dashicons woocommerce-help-tip" data-tip="{$translations['packetSubmissionValidationErrorTooltip']}"></span>
+    </div>
     <a
             n:if="$order->getPacketId()"
             class="button dashicons dashicons-media-default packetery-dashicons-button-fix"

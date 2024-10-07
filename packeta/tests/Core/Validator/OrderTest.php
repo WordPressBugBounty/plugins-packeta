@@ -17,17 +17,18 @@ class OrderTest extends TestCase {
 		$sizeValidator         = new Size();
 		$validatorTranslations = [
 			Order::ERROR_TRANSLATION_KEY_NUMBER                     => 'Order number is not set.',
-			// To test missing translation.
-			//Order::ERROR_TRANSLATION_KEY_NAME                       => 'Customer name is not set.',
+			Order::ERROR_TRANSLATION_KEY_NAME                       => 'Customer name is not set.',
 			Order::ERROR_TRANSLATION_KEY_VALUE                      => 'Order value is not set.',
 			Order::ERROR_TRANSLATION_KEY_PICKUP_POINT_OR_CARRIER_ID => 'Pickup point or carrier id is not set.',
 			Order::ERROR_TRANSLATION_KEY_ESHOP                      => 'Sender label is not set.',
 			Order::ERROR_TRANSLATION_KEY_WEIGHT                     => 'Weight is not set or is zero.',
 			Order::ERROR_TRANSLATION_KEY_ADDRESS                    => 'Address is not set or is incomplete.',
-			Order::ERROR_TRANSLATION_KEY_SIZE                       => 'Order dimensions are not set.',
+			Order::ERROR_TRANSLATION_KEY_HEIGHT                     => 'Order height is not set.',
+			Order::ERROR_TRANSLATION_KEY_WIDTH                      => 'Order width is not set.',
+			Order::ERROR_TRANSLATION_KEY_LENGTH                     => 'Order length is set.',
 			Order::ERROR_TRANSLATION_KEY_CUSTOMS_DECLARATION        => 'Customs declaration is not set.',
 		];
-		$validator             = new Order( $addressValidator, $sizeValidator, $validatorTranslations );
+		$validator = new Order( $addressValidator, $sizeValidator, $validatorTranslations );
 
 		$dummyOrder = DummyFactory::createOrderCzPp();
 		$dummyOrder->setPickupPoint( DummyFactory::createPickupPoint() );
@@ -36,7 +37,10 @@ class OrderTest extends TestCase {
 
 		$dummyOrder->setNumber( '' );
 		$dummyOrder->setName( '' );
-		self::assertCount( 2, $validator->validate( $dummyOrder ) );
+		$validationResult = $validator->validate( $dummyOrder );
+		self::assertArrayHasKey( Order::ERROR_TRANSLATION_KEY_NUMBER, $validationResult );
+		self::assertArrayHasKey( Order::ERROR_TRANSLATION_KEY_NAME, $validationResult );
+		self::assertCount( 2, $validationResult );
 		self::assertFalse( $validator->isValid( $dummyOrder ) );
 
 		$dummyOrderHd        = DummyFactory::createOrderCzHdIncomplete();
@@ -45,7 +49,10 @@ class OrderTest extends TestCase {
 		$dummyOrderHd->setDeliveryAddress( DummyFactory::createAddress() );
 		self::assertSame( [], $validator->validate( $dummyOrderHd ) );
 
-		self::assertCount( 2, $validator->validate( $dummyOrderHdInvalid ) );
+		self::assertCount( 4, $validator->validate( $dummyOrderHdInvalid ) );
+
+		$validator = new Order( $addressValidator, $sizeValidator, [ Order::ERROR_TRANSLATION_KEY_NAME => ''] );
+		self::assertFalse( $validator->isValid( $dummyOrder ) );
 	}
 
 }
