@@ -4,12 +4,8 @@ import { useView } from "./useView";
 
 export const View = ( { cart } ) => {
 
-	const view = useView( cart );
-	if ( null === view ) {
-		return null;
-	}
-
 	const {
+		skipView,
 		buttonCallback,
 		buttonLabel,
 		buttonInfo,
@@ -19,10 +15,10 @@ export const View = ( { cart } ) => {
 		logo,
 		translations,
 		loading,
-	} = view;
+	} = useView( cart );
 
 	// translations are sometimes unexpectedly undefined
-	if ( ! translations ) {
+	if ( skipView || ! translations ) {
 		return null;
 	}
 
