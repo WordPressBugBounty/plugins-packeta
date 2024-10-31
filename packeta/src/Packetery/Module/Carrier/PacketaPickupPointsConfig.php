@@ -16,7 +16,7 @@ use Packetery\Core\PickupPointProvider\CompoundProvider;
 use Packetery\Core\PickupPointProvider\VendorCollectionFactory;
 use Packetery\Core\PickupPointProvider\VendorProvider;
 use Packetery\Module\Exception\InvalidCarrierException;
-use Packetery\Module\Options\FeatureFlagManager;
+use Packetery\Module\Options\FlagManager\FeatureFlagProvider;
 
 /**
  * Packeta pickup points configuration.
@@ -44,25 +44,25 @@ class PacketaPickupPointsConfig {
 	/**
 	 * Feature flag.
 	 *
-	 * @var FeatureFlagManager
+	 * @var FeatureFlagProvider
 	 */
-	private $featureFlag;
+	private $featureFlagProvider;
 
 	/**
 	 * PacketaPickupPointsConfig.
 	 *
 	 * @param CompoundCarrierCollectionFactory $compoundCarrierFactory  CompoundCarrierCollectionFactory.
 	 * @param VendorCollectionFactory          $vendorCollectionFactory VendorCollectionFactory.
-	 * @param FeatureFlagManager               $featureFlag             Feature flag.
+	 * @param FeatureFlagProvider              $featureFlagProvider     Feature flag.
 	 */
 	public function __construct(
 		CompoundCarrierCollectionFactory $compoundCarrierFactory,
 		VendorCollectionFactory $vendorCollectionFactory,
-		FeatureFlagManager $featureFlag
+		FeatureFlagProvider $featureFlagProvider
 	) {
 		$this->vendorCollectionFactory = $vendorCollectionFactory;
 		$this->compoundCarrierFactory  = $compoundCarrierFactory;
-		$this->featureFlag             = $featureFlag;
+		$this->featureFlagProvider     = $featureFlagProvider;
 	}
 
 	/**
@@ -92,12 +92,35 @@ class PacketaPickupPointsConfig {
 	}
 
 	/**
+	 * Gets vendor groups for compound carrier.
+	 *
+	 * @param string $carrierId Carrier id.
+	 *
+	 * @return array
+	 */
+	public function getCompoundCarrierVendorGroups( string $carrierId ): array {
+		$vendorGroups              = [];
+		$vendorCarriers            = $this->getVendorCarriers();
+		$compoundCarrierCollection = $this->compoundCarrierFactory->create();
+		foreach ( $compoundCarrierCollection as $compoundProvider ) {
+			if ( $compoundProvider->getId() === $carrierId ) {
+				$vendorCodes = $compoundProvider->getVendorCodes();
+				foreach ( $vendorCodes as $vendorCode ) {
+					$vendorGroups[] = $vendorCarriers[ $vendorCode ]->getGroup();
+				}
+			}
+		}
+
+		return $vendorGroups;
+	}
+
+	/**
 	 * Gets vendor carriers settings.
 	 *
 	 * @return VendorProvider[]
 	 */
 	public function getVendorCarriers(): array {
-		if ( ! $this->featureFlag->isSplitActive() ) {
+		if ( ! $this->featureFlagProvider->isSplitActive() ) {
 			return [];
 		}
 
