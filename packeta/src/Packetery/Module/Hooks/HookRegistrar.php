@@ -13,6 +13,8 @@ use Packetery\Module\Checkout\CheckoutStorage;
 use Packetery\Module\CronService;
 use Packetery\Module\Dashboard\DashboardPage;
 use Packetery\Module\DashboardWidget;
+use Packetery\Module\DiagnosticsLogger\DiagnosticsLogger;
+use Packetery\Module\Email\EmailShortcodes;
 use Packetery\Module\Framework\WpAdapter;
 use Packetery\Module\Log;
 use Packetery\Module\MessageManager;
@@ -257,6 +259,16 @@ class HookRegistrar {
 	 */
 	private $dashboardPage;
 
+	/**
+	 * @var EmailShortcodes
+	 */
+	private $shortcodes;
+
+	/**
+	 * @var DiagnosticsLogger
+	 */
+	private $diagnosticsLogger;
+
 	public function __construct(
 		PluginHooks $pluginHooks,
 		MessageManager $messageManager,
@@ -299,7 +311,9 @@ class HookRegistrar {
 		ShippingProvider $shippingProvider,
 		CheckoutStorage $checkoutStorage,
 		WizardAssetManager $wizardAssetManager,
-		DashboardPage $dashboardPage
+		DashboardPage $dashboardPage,
+		EmailShortcodes $shortcodes,
+		DiagnosticsLogger $diagnosticsLogger
 	) {
 		$this->messageManager            = $messageManager;
 		$this->checkout                  = $checkout;
@@ -343,6 +357,8 @@ class HookRegistrar {
 		$this->checkoutStorage           = $checkoutStorage;
 		$this->wizardAssetManager        = $wizardAssetManager;
 		$this->dashboardPage             = $dashboardPage;
+		$this->shortcodes                = $shortcodes;
+		$this->diagnosticsLogger         = $diagnosticsLogger;
 	}
 
 	public function register(): void {
@@ -376,7 +392,9 @@ class HookRegistrar {
 		}
 
 		$wcEmailHook = $this->optionsProvider->getEmailHook();
-		$this->wpAdapter->addAction( $wcEmailHook, [ $this->viewMail, 'renderEmailFooter' ] );
+		if ( $wcEmailHook !== '' && $this->optionsProvider->isAutoEmailInfoInsertionEnabled() ) {
+			$this->wpAdapter->addAction( $wcEmailHook, [ $this->viewMail, 'renderEmailFooter' ] );
+		}
 
 		$this->wpAdapter->addFilter( 'woocommerce_shipping_methods', [ $this, 'addShippingMethods' ] );
 		$this->cronService->register();
@@ -385,6 +403,7 @@ class HookRegistrar {
 		$this->updateOrderHook->register();
 		$this->packetSubmitter->registerCronAction();
 		$this->packetSynchronizer->register();
+		$this->shortcodes->register();
 
 		add_action( 'init', [ $this->shippingProvider, 'loadClasses' ] );
 
@@ -531,6 +550,7 @@ class HookRegistrar {
 			$this->wpAdapter->addAction( 'admin_init', [ $this->orderCollectionPrint, 'print' ] );
 
 			$this->wpAdapter->addAction( 'admin_init', [ $this->exporter, 'outputExportTxt' ] );
+			$this->wpAdapter->addAction( 'admin_init', [ $this->diagnosticsLogger, 'deletePacketaLog' ] );
 			$this->wpAdapter->addAction( 'admin_init', [ $this->pluginHooks, 'handleActions' ] );
 
 			$this->wpAdapter->addAction( 'deleted_post', [ $this->orderRepository, 'deletedPostHook' ], 10, 2 );
