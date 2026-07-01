@@ -1,4 +1,7 @@
 == Changelog ==
+= 2.3.0 =
+Added: Option to display the consignment code in the order detail and on the printed parcel list.
+
 = 2.2.0 =
 Added: Optional validation of the selected pickup point using the API.
 Added: Extended logging for diagnostics.
