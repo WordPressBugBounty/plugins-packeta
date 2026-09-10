@@ -2,11 +2,11 @@
 Contributors: packeta
 Tags: WooCommerce, shipping
 Requires at least: 6.3
-Tested up to: 7.0
-Stable tag: 2.3.1
+Tested up to: 7.1
+Stable tag: 2.3.2
 Requires PHP: 7.4
 WC requires at least: 5.1
-WC tested up to: 10.9.1
+WC tested up to: 11.1.0
 License: GPLv3
 License URI: https://www.gnu.org/licenses/gpl-3.0.html
 Official plugin for selecting Packeta pickup points or address delivery and submitting orders directly from your e-shop.
@@ -63,6 +63,10 @@ We are constantly working on adding new features. If there is a feature you woul
 Please contact us at e-commerce.support@packeta.com .
 
 == Changelog ==
+= 2.3.2 =
+Added: Romanian Post carriers (home delivery and pickup points).
+Fixed: The widget used the billing country instead of the shipping country when the shipping address form was hidden in the checkout.
+
 = 2.3.1 =
 Fixed: Database structure was not updated after updating the plugin.
 

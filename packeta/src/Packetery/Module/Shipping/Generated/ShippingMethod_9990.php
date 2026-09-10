@@ -11,7 +11,7 @@ namespace Packetery\Module\Shipping\Generated;
 use Packetery\Module\Shipping\BaseShippingMethod;
 
 /**
- * IE Fastway HD
+ * IE An Post HD
  */
 class ShippingMethod_9990 extends BaseShippingMethod
 {
